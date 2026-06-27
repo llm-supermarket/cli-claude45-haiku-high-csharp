@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: macos-latest
+            rid: osx-x64
+          - os: macos-latest
+            rid: osx-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test -c Release --no-build --verbosity normal
+
+      - name: Publish
+        run: dotnet publish src/Cli/Cli.csproj -c Release -o ./bin/publish -r ${{ matrix.rid }} --self-contained
+
+      - name: Create artifact name
+        id: artifact
+        shell: bash
+        run: |
+          version="${{ github.ref }}" && version=${version#refs/tags/v}
+          artifact="cli-claude45-haiku-csharp-${version}-${{ matrix.rid }}"
+          echo "artifact=${artifact}" >> $GITHUB_OUTPUT
+          echo "filename=${artifact}.zip" >> $GITHUB_OUTPUT
+
+      - name: Compress artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ./bin/publish/* -DestinationPath "./${{ steps.artifact.outputs.filename }}"
+
+      - name: Compress artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          zip -r "${{ steps.artifact.outputs.filename }}" ./bin/publish/*
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact }}
+          path: ${{ steps.artifact.outputs.filename }}
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/*/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Scoop manifest
+        run: |
+          echo "Scoop and Brew manifests need to be updated in their respective bucket repositories"
