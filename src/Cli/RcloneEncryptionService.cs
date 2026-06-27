@@ -86,7 +86,7 @@ public class RcloneEncryptionService
 
         using var aesGcm = new AesGcm(key, 16);
         var plaintext = new byte[ciphertext.Length];
-        aesGcm.Decrypt(nonce, ciphertext, plaintext, tag);
+        aesGcm.Decrypt(new ReadOnlySpan<byte>(nonce), new ReadOnlySpan<byte>(ciphertext), new ReadOnlySpan<byte>(tag), new Span<byte>(plaintext));
 
         return plaintext;
     }
@@ -168,7 +168,7 @@ public class RcloneEncryptionService
 
         using var aesGcm = new AesGcm(key, 16);
         var plaintext = new byte[encryptedData.Length];
-        aesGcm.Decrypt(iv, encryptedData, plaintext, tag);
+        aesGcm.Decrypt(new ReadOnlySpan<byte>(iv), new ReadOnlySpan<byte>(encryptedData), new ReadOnlySpan<byte>(tag), new Span<byte>(plaintext));
 
         return System.Text.Encoding.UTF8.GetString(plaintext);
     }
